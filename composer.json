@@ -11,6 +11,9 @@
     "autoload": {
         "psr-4": {
             "Sphere\\Debloat\\": "src/"
-        }
+        },
+        "files": [
+            "src/Util/functions.php"
+        ]
     }
 }

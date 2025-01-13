@@ -21,15 +21,15 @@ class Plugin {
         }
 
         // Initialize the plugin components
-        add_action('wp_enqueue_scripts', [$this, 'process_styles'], 999999);
+        add_action('wp_print_styles', [$this, 'process_styles'], 999999);
     }
 
     public static function options() {
         $options = get_option('css_debloat_options', []);
         return (object) wp_parse_args($options, [
-            'remove_css_all' => false,
-            'remove_css_theme' => false,
-            'remove_css_plugins' => false,
+            'remove_css_all' => true, // Set to true by default
+            'remove_css_theme' => true,
+            'remove_css_plugins' => true,
             'remove_css_excludes' => '',
             'allow_css_selectors' => '',
             'allow_css_conditionals' => false,
@@ -44,37 +44,88 @@ class Plugin {
         }
         
         global $wp_styles;
-        $dom = $this->get_dom();
         
-        if (!$dom) {
+        if (!is_object($wp_styles)) {
             return;
         }
+
+        // Start output buffering
+        ob_start();
+        
+        // Create DOM document
+        $dom = new \DOMDocument();
+        libxml_use_internal_errors(true);
         
         $stylesheets = [];
         foreach ($wp_styles->queue as $handle) {
+            if (!isset($wp_styles->registered[$handle])) {
+                continue;
+            }
+
+            $style = $wp_styles->registered[$handle];
+            
+            // Skip if no source
+            if (!$style->src) {
+                continue;
+            }
+
             $stylesheet = new OptimizeCss\Stylesheet();
-            $stylesheet->url = $wp_styles->registered[$handle]->src;
+            $stylesheet->url = $style->src;
             $stylesheet->id = $handle;
+            
+            // Convert relative URLs to absolute
+            if (strpos($stylesheet->url, '//') === false) {
+                if (strpos($stylesheet->url, '/') === 0) {
+                    $stylesheet->url = site_url($stylesheet->url);
+                } else {
+                    $stylesheet->url = site_url('/' . $stylesheet->url);
+                }
+            }
+            
             $stylesheets[] = $stylesheet;
+            
+            // Dequeue the original stylesheet
+            wp_dequeue_style($handle);
         }
         
-        $remover = new RemoveCss($stylesheets, $dom, ob_get_clean());
-        $content = $remover->process();
-        
-        echo $content;
+        if (empty($stylesheets)) {
+            return;
+        }
+
+        // Process the stylesheets
+        $remover = new RemoveCss($stylesheets, $dom, '');
+        $remover->process();
+
+        // Re-enqueue optimized stylesheets
+        foreach ($stylesheets as $sheet) {
+            if (!empty($sheet->content)) {
+                wp_enqueue_style(
+                    'optimized-' . $sheet->id,
+                    false,
+                    [],
+                    null
+                );
+                wp_add_inline_style('optimized-' . $sheet->id, $sheet->content);
+            } else {
+                // If optimization failed, re-enqueue original
+                wp_enqueue_style($sheet->id);
+            }
+        }
+
+        libxml_clear_errors();
     }
     
     private function should_process() {
-        if (is_admin()) {
+        if (is_admin() || wp_doing_ajax() || wp_doing_cron()) {
             return false;
         }
         
+        // Don't process on login/register pages
+        if (in_array($GLOBALS['pagenow'], ['wp-login.php', 'wp-register.php'])) {
+            return false;
+        }
+
         return true;
-    }
-    
-    private function get_dom() {
-        ob_start();
-        return new \DOMDocument();
     }
 
     public static function file_system() {

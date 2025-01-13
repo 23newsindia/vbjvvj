@@ -15,7 +15,15 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
+// Define plugin constants
+define('WP_UNUSED_CSS_REMOVER_PATH', plugin_dir_path(__FILE__));
+define('WP_UNUSED_CSS_REMOVER_URL', plugin_dir_url(__FILE__));
+
+// Require Composer autoloader
 require_once __DIR__ . '/vendor/autoload.php';
+
+// Load utility functions
+require_once __DIR__ . '/src/Util/functions.php';
 
 // Initialize the plugin
 function wp_unused_css_remover_init() {
