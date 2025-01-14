@@ -33,7 +33,7 @@ class Sanitizer
         $this->allow_selectors = $allow;
     }
 
-    public function sanitize() 
+    public function sanitize()
     {
         $data = $this->sheet->parsed_data ?: [];
         if (!$data) {
@@ -54,6 +54,54 @@ class Sanitizer
 
         return $this->render_css($data);
     }
+  
+  
+  
+      protected function find_used_selectors()
+    {
+        // Add support for dynamic classes
+        add_filter('debloat/used_selectors', function ($selectors) {
+            // Add WordPress dynamic classes
+            $selectors['classes'][] = 'current-menu-item';
+            $selectors['classes'][] = 'active';
+
+            // Add other dynamic classes if needed
+            $selectors['classes'][] = 'open'; // Example of an additional class
+            return $selectors;
+        });
+
+        // Apply filters to extend the used selectors for classes
+        $this->used_markup['classes'] = apply_filters(
+            'debloat/used_selectors',
+            $this->used_markup['classes']
+        );
+
+        // Ensure other used_markup types (e.g., tags and IDs) are processed
+        // Example: Add tags dynamically if necessary
+        add_filter('debloat/used_tags', function ($tags) {
+            $tags[] = 'main'; // Example tag
+            $tags[] = 'header'; // Example tag
+            return $tags;
+        });
+
+        $this->used_markup['tags'] = apply_filters(
+            'debloat/used_tags',
+            $this->used_markup['tags']
+        );
+
+        // Process IDs dynamically if needed
+        add_filter('debloat/used_ids', function ($ids) {
+            $ids[] = 'unique-id'; // Example ID
+            return $ids;
+        });
+
+        $this->used_markup['ids'] = apply_filters(
+            'debloat/used_ids',
+            $this->used_markup['ids']
+        );
+    }
+}
+  
 
     public function convert_urls(Document $data)
     {

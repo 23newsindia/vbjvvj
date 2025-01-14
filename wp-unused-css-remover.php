@@ -40,6 +40,22 @@ function wp_unused_css_remover_activate() {
     flush_rewrite_rules();
 }
 
+
+// wp-unused-css-remover.php
+add_action('plugins_loaded', function() {
+    if (!is_admin()) {
+        add_action('template_redirect', function() {
+            $plugin = new Sphere\Debloat\Plugin();
+            $plugin->init();
+        }, 0);
+    }
+});
+
+
+
+
+
+
 // Deactivation hook
 register_deactivation_hook(__FILE__, 'wp_unused_css_remover_deactivate');
 function wp_unused_css_remover_deactivate() {

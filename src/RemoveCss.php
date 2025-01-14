@@ -20,13 +20,25 @@ class RemoveCss
         $this->dom = $dom;
         $this->html = $raw_html;
     }
+  
+  
+  
 
-    public function process()
-    {       
-        // Collect all the classes, ids, tags used in DOM.
+   public function process()
+{
+    // Start output buffering
+    ob_start(function ($html) {
+        if (!$html) {
+            return $html;
+        }
+
+        // Load HTML into DOM
+        $this->dom->loadHTML($html, LIBXML_HTML_NOIMPLIED | LIBXML_HTML_NODEFDTD);
+
+        // Collect all the classes, ids, tags used in DOM
         $this->find_used_selectors();
 
-        // Figure out valid sheets.
+        // Figure out valid sheets
         $this->setup_valid_sheets();
 
         do_action('debloat/remove_css_begin', $this);
@@ -74,35 +86,45 @@ class RemoveCss
             $sheet->parsed_data = '';
         }
 
-        $total = array_reduce($this->stylesheets, function($acc, $item) {
+        $total = array_reduce($this->stylesheets, function ($acc, $item) {
             if (!empty($item->original_size)) {
                 $acc += ($item->original_size - $item->new_size);
             }
             return $acc;
         }, 0);
 
-        $this->html .= "\n<!-- Debloat Remove CSS Saved: {$total} bytes. -->";
-        
-        return $this->html;
-    }
+        // Append the optimization stats as a comment
+        $html .= "\n<!-- Debloat Remove CSS Saved: {$total} bytes. -->";
 
+        return $html;
+    });
+
+    // End output buffering and return processed HTML
+    return ob_get_clean();
+}
+
+  
+  
+  
+  
     public function setup_sheet_cache(Stylesheet $sheet)
-    {
-        if (!isset($sheet->file)) {
-            return;
-        }
+{
+    // Generate a unique cache key based on the stylesheet URL
+    $cache_key = 'css_optimize_' . md5($sheet->url);
+    $cached = get_transient($cache_key);
 
-        $cache = get_transient($this->get_transient_id($sheet));
-        if ($cache && $cache['mtime'] < Plugin::file_system()->mtime($sheet->file)) {
-            return;
-        }
-
-        if ($cache && !empty($cache['data'])) {
-            $sheet->parsed_data = $cache['data'];
-            $sheet->has_cache = true;
-            return;
+    if ($cached) {
+        // Check if the cached file is up-to-date
+        $file_time = Plugin::file_system()->mtime($sheet->file);
+        if ($cached['time'] >= $file_time) {
+            $sheet->content = $cached['content'];
+            return true;
         }
     }
+
+    return false;
+}
+
 
     protected function get_transient_id($sheet)
     {
